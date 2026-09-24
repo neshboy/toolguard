@@ -1,0 +1,54 @@
+{
+  "name": "toolguard",
+  "version": "0.1.0",
+  "description": "Middleware that hardens function/tool-calling for small local LLMs: validates and repairs malformed tool-call JSON against real JSON Schema tool definitions before it ever reaches your tool-execution layer.",
+  "type": "module",
+  "license": "MIT",
+  "author": "ToolGuard contributors",
+  "keywords": [
+    "llm",
+    "tool-calling",
+    "function-calling",
+    "json-schema",
+    "json-repair",
+    "local-llm",
+    "ollama",
+    "mcp"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "toolguard": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "demo:ollama": "tsx scripts/live-ollama-demo.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vitest": "^5.0.1"
+  }
+}
