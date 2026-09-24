@@ -1,0 +1,25 @@
+{
+  "name": "get_weather",
+  "description": "Get the current weather for a location.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "location": {
+        "type": "string",
+        "description": "City name, e.g. 'Paris'"
+      },
+      "unit": {
+        "type": "string",
+        "enum": ["celsius", "fahrenheit"]
+      },
+      "days": {
+        "type": "integer",
+        "description": "Forecast horizon in days",
+        "minimum": 1,
+        "maximum": 14
+      }
+    },
+    "required": ["location"],
+    "additionalProperties": false
+  }
+}
