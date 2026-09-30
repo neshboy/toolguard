@@ -45,6 +45,24 @@ describe("integration: end-to-end raw model output -> validated tool call", () =
     }
   });
 
+  it("does not get hijacked by an unrelated bracket-like character in preceding prose", () => {
+    // A markdown-style list in the model's lead-in prose contains a `[`
+    // that has nothing to do with the actual tool call. The real call is
+    // well-formed and appears later in the same output.
+    const rawModelOutput =
+      'Sure, let me check the weather list [today, tomorrow] for you.\n\n' +
+      '{"name":"get_weather","arguments":{"location":"Paris"}}';
+
+    const result = repairToolCall(rawModelOutput, weatherTool);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.toolCall).toEqual({
+        name: "get_weather",
+        arguments: { location: "Paris" }
+      });
+    }
+  });
+
   it("repairs a real multi-fault case: generation cut off mid-object AND a stringified numeric argument", () => {
     // Realistic combination: a small model hits its token limit partway
     // through the call (truncation) and also quoted an integer argument

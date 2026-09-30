@@ -39,6 +39,7 @@ export function repairTruncation(input: string): RepairPassResult {
   const stack: Array<"{" | "["> = [];
   let inString = false;
   let escaped = false;
+  let stringStart = -1;
 
   for (let i = 0; i < input.length; i++) {
     const ch = input[i]!;
@@ -54,6 +55,7 @@ export function repairTruncation(input: string): RepairPassResult {
     }
     if (ch === '"') {
       inString = true;
+      stringStart = i;
     } else if (ch === "{" || ch === "[") {
       stack.push(ch);
     } else if (ch === "}") {
@@ -67,9 +69,19 @@ export function repairTruncation(input: string): RepairPassResult {
   let changed = false;
 
   if (inString) {
-    text = stripDanglingTrailingBackslash(text);
-    text += '"';
-    changed = true;
+    if (isDanglingObjectKey(input, stringStart, stack)) {
+      // The dangling, never-closed string is sitting in key position (right
+      // after `{` or `,` inside an open object) with nothing after it: no
+      // colon, no value. Closing the quote would produce `{"key"}`, which
+      // JSON.parse rejects. There's no value to fall back to for this key,
+      // so drop the incomplete member entirely rather than inventing one.
+      text = cutBackToLastBoundary(input.slice(0, stringStart));
+      changed = true;
+    } else {
+      text = stripDanglingTrailingBackslash(text);
+      text += '"';
+      changed = true;
+    }
   }
 
   if (stack.length === 0 && !changed) {
@@ -143,6 +155,25 @@ function literalCompletion(word: string): string | null {
 
 function isCompleteJsonNumber(candidate: string): boolean {
   return /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/.test(candidate);
+}
+
+/**
+ * True when the still-open string starting at `quoteIndex` is sitting in
+ * object-key position: the top of `stack` is `{` (an open object, not an
+ * array), and the nearest non-whitespace character before the opening quote
+ * is `{` or `,`. Since this is only ever called for a string that never
+ * even reached a closing quote, there is by construction nothing after it
+ * (no `:`, no value) to check for separately.
+ */
+function isDanglingObjectKey(
+  text: string,
+  quoteIndex: number,
+  stack: ReadonlyArray<"{" | "[">
+): boolean {
+  if (stack[stack.length - 1] !== "{") return false;
+  let i = quoteIndex - 1;
+  while (i >= 0 && /[ \t\r\n]/.test(text[i]!)) i--;
+  return i >= 0 && (text[i] === "{" || text[i] === ",");
 }
 
 function stripDanglingTrailingBackslash(text: string): string {

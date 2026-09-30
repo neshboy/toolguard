@@ -1,4 +1,4 @@
-import { extractJsonCandidate } from "./extractJson.js";
+import { extractJsonCandidates } from "./extractJson.js";
 import { runRepairPipeline } from "./repair/pipeline.js";
 import { coerceTypes } from "./repair/typeCoercion.js";
 import { validateArguments } from "./validator.js";
@@ -46,8 +46,8 @@ function extractAndParse(rawOutput: string, rawInputForReport: string): ParseOut
     };
   }
 
-  const candidate = extractJsonCandidate(trimmed);
-  if (!candidate) {
+  const candidates = extractJsonCandidates(trimmed);
+  if (candidates.length === 0) {
     return {
       ok: false,
       failure: {
@@ -60,25 +60,36 @@ function extractAndParse(rawOutput: string, rawInputForReport: string): ParseOut
     };
   }
 
-  const { text, applied, attempted } = runRepairPipeline(candidate.candidate);
+  // Don't commit irrevocably to the first candidate: prose preceding the
+  // real tool call can contain an unrelated bracket-like character (a
+  // markdown list, a quoted example, ...) that looks like a JSON start but
+  // never parses. Try each candidate's repair+parse pipeline in order and
+  // use the first that actually yields valid JSON; if none do, report the
+  // first candidate's failure since it's the most likely intended call.
+  let firstFailure: RepairFailure | null = null;
 
-  try {
-    const parsed = JSON.parse(text) as unknown;
-    return { ok: true, value: { parsed, applied, attempted, finalText: text } };
-  } catch (err) {
-    const parseError = err instanceof Error ? err.message : String(err);
-    return {
-      ok: false,
-      failure: {
-        ok: false,
-        reason: "unrepairable_json",
-        message: `Automatic repair could not produce valid JSON. Underlying parse error: ${parseError}`,
-        attemptedRepairs: attempted,
-        rawInput: rawInputForReport,
-        bestEffortText: text
+  for (const candidate of candidates) {
+    const { text, applied, attempted } = runRepairPipeline(candidate.candidate);
+
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      return { ok: true, value: { parsed, applied, attempted, finalText: text } };
+    } catch (err) {
+      if (!firstFailure) {
+        const parseError = err instanceof Error ? err.message : String(err);
+        firstFailure = {
+          ok: false,
+          reason: "unrepairable_json",
+          message: `Automatic repair could not produce valid JSON. Underlying parse error: ${parseError}`,
+          attemptedRepairs: attempted,
+          rawInput: rawInputForReport,
+          bestEffortText: text
+        };
       }
-    };
+    }
   }
+
+  return { ok: false, failure: firstFailure! };
 }
 
 function readEnvelope(parsed: unknown): Envelope {
