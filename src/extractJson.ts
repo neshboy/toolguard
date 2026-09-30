@@ -3,25 +3,63 @@
  *
  * Small local models rarely emit *just* the JSON: they wrap it in prose
  * ("Sure, here's the call:"), markdown code fences (```json ... ```), or
- * leave trailing commentary after it. This scans for the first `{` or `[`
- * and then walks forward tracking bracket depth and string state to find
- * where that top-level value actually ends, ignoring anything before or
- * after it (fences included, since they simply fall outside the matched
- * range).
+ * leave trailing commentary after it. Naively committing to the very first
+ * `{`/`[` in the text is not safe: prose preceding the real call can easily
+ * contain an unrelated bracket-like character (a markdown list `[today,
+ * tomorrow]`, a quoted example, etc.) that has nothing to do with the tool
+ * call. Instead, this walks the text producing one candidate per top-level
+ * bracket run: from each `{`/`[` not already consumed by an earlier
+ * candidate, it tracks bracket depth and string state to find where that
+ * value ends (or where the input runs out, if it never closes), then
+ * resumes scanning for the next candidate immediately after that span.
+ * Callers try each candidate in turn and use the first one that actually
+ * parses as JSON, so an early false lead like `[today, tomorrow]` is simply
+ * skipped over once it fails to parse.
  *
- * If the top-level structure's depth never returns to zero (or a string is
- * left open) before the input runs out, `truncated` is reported so the
- * caller knows to run truncation repair.
+ * If a given candidate's depth never returns to zero (or a string is left
+ * open) before the input runs out, that candidate's `truncated` is reported
+ * so the caller knows to run truncation repair on it.
  */
 export interface JsonCandidate {
   candidate: string;
   truncated: boolean;
 }
 
+/**
+ * Returns only the first candidate, for backwards-compatible/simple callers.
+ * Prefer `extractJsonCandidates` when the caller can verify a candidate
+ * parses and should fall through to a later one otherwise.
+ */
 export function extractJsonCandidate(rawOutput: string): JsonCandidate | null {
-  const start = findFirstBracket(rawOutput);
-  if (start === -1) return null;
+  return extractJsonCandidates(rawOutput)[0] ?? null;
+}
 
+/**
+ * Returns every top-level bracket-run candidate in `rawOutput`, in order.
+ * Each candidate's span is skipped when looking for the next one, so
+ * brackets nested inside an already-produced candidate are never re-offered
+ * as separate candidates.
+ */
+export function extractJsonCandidates(rawOutput: string): JsonCandidate[] {
+  const candidates: JsonCandidate[] = [];
+  let searchFrom = 0;
+
+  while (searchFrom < rawOutput.length) {
+    const start = findNextBracket(rawOutput, searchFrom);
+    if (start === -1) break;
+
+    const { candidate, truncated, end } = extractFrom(rawOutput, start);
+    candidates.push({ candidate, truncated });
+    searchFrom = end;
+  }
+
+  return candidates;
+}
+
+function extractFrom(
+  rawOutput: string,
+  start: number
+): { candidate: string; truncated: boolean; end: number } {
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -56,12 +94,11 @@ export function extractJsonCandidate(rawOutput: string): JsonCandidate | null {
     }
   }
 
-  const candidate = rawOutput.slice(start, end);
-  return { candidate, truncated: !closed };
+  return { candidate: rawOutput.slice(start, end), truncated: !closed, end };
 }
 
-function findFirstBracket(text: string): number {
-  for (let i = 0; i < text.length; i++) {
+function findNextBracket(text: string, from: number): number {
+  for (let i = from; i < text.length; i++) {
     if (text[i] === "{" || text[i] === "[") return i;
   }
   return -1;

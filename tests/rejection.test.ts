@@ -89,6 +89,22 @@ describe("repairToolCall rejection reasons", () => {
     }
   });
 
+  it("reason: schema_validation_failed (not unrepairable_json) when truncation cuts off mid object-key", () => {
+    // Generation stopped mid-key, before any colon/value. Truncation repair
+    // should fall back to an empty arguments object rather than leaving a
+    // bare, unparseable key, so this is rejected for a missing required
+    // property, not for producing unrepairable JSON.
+    const result = repairToolCall(
+      '{"name":"get_weather","arguments":{"loc',
+      weatherTool
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("schema_validation_failed");
+      expect(result.attemptedRepairs).toContain("truncation-repair");
+    }
+  });
+
   it("reason: schema_validation_failed when repair succeeds syntactically but the value is still invalid", () => {
     // Truncated mid-value: closing the string leaves "unit" as "cel", which
     // is syntactically valid JSON but not one of the declared enum values.

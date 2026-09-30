@@ -44,6 +44,31 @@ describe("repairTruncation (strategy b)", () => {
     expect(result).toEqual({ text: '{"a": 1, "b": {}}', changed: true });
   });
 
+  it("removes a dangling object key truncated before any colon/value, rather than leaving a bare-key object", () => {
+    const input = '{"loc';
+    const result = repairTruncation(input);
+    expect(result).toEqual({ text: "{}", changed: true });
+    expect(() => JSON.parse(result.text)).not.toThrow();
+  });
+
+  it("removes a dangling object key (not the first member) truncated before any colon/value", () => {
+    const input = '{"a": 1, "loc';
+    const result = repairTruncation(input);
+    expect(result).toEqual({ text: '{"a": 1}', changed: true });
+  });
+
+  it("removes a dangling object key truncated before colon/value inside a nested object", () => {
+    const input = '{"a": {"loc';
+    const result = repairTruncation(input);
+    expect(result).toEqual({ text: '{"a": {}}', changed: true });
+  });
+
+  it("still closes a dangling string that is an array element (value position, not a key)", () => {
+    const input = '["loc';
+    const result = repairTruncation(input);
+    expect(result).toEqual({ text: '["loc"]', changed: true });
+  });
+
   it("removes an incomplete trailing number rather than guessing its digits", () => {
     const input = '{"a": 1, "score": 12.';
     const result = repairTruncation(input);

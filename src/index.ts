@@ -1,6 +1,6 @@
 export { repairToolCall, repairToolCallAmong } from "./repairToolCall.js";
 export { validateArguments } from "./validator.js";
-export { extractJsonCandidate } from "./extractJson.js";
+export { extractJsonCandidate, extractJsonCandidates } from "./extractJson.js";
 export { runRepairPipeline } from "./repair/pipeline.js";
 export { repairUnescapedQuotes } from "./repair/unescapedQuotes.js";
 export { repairTrailingCommas } from "./repair/trailingComma.js";
